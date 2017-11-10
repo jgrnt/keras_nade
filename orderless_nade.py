@@ -70,7 +70,6 @@ class NadeMaskLayer(Layer):
         mask_rng = RandomStreams(1)
 
         ints = mask_rng.random_integers(size=[5], high=self.mask_size - 1)
-        ints = K.print_tensor(ints,"ints")
         mask = T.zeros(([self.mask_size]))
 
         def set_value_at_position(i, mask):
@@ -96,10 +95,9 @@ def logdensity_model(inner_model):
     outs = []
     for i in range(input_size):
         bn_mask = K.repeat_elements(K.expand_dims(K.constant(mask), 0), batch_size, 0)
-        masked_input = Lambda(lambda  x: K.print_tensor(x,'masked_input'))(Lambda(lambda x: K.concatenate([x * mask.copy(), bn_mask])
-                              )(inputs))
+        masked_input = Lambda(lambda x: K.concatenate([x * mask.copy(), bn_mask]))(inputs)
         result = Lambda(lambda x: K.expand_dims(x[i]), output_shape=(1,))(inner_model([masked_input, inputs, Lambda(lambda x: bn_mask, name="mask_"+str(i))(inputs)]))
-        outs.append(Lambda(lambda  x: K.print_tensor(x,"test_out"))(result))
+        outs.append(result)
         mask[i] = 1
     if len(outs) == 1:
         intermediate = outs[0]
