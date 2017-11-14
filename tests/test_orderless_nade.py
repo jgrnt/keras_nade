@@ -8,7 +8,6 @@ import utils
 from orderless_nade import logdensity_model, training_model, create_input_layers
 from utils import createMoGLayer
 
-
 def test_compare_original_nade():
     import h5py
     masked_input_layer, input_layer, mask_layer = create_input_layers(2)

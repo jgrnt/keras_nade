@@ -4,40 +4,6 @@ from keras.engine.topology import Layer
 from keras.layers import Input, Lambda, Concatenate
 from keras.models import Model
 
-
-class NadeInputLayer(Layer):
-
-    def __init__(self, mask_size, **kwargs):
-        super(NadeMaskLayer, self).__init__(**kwargs)
-        self.mask_size = mask_size
-
-    def build(self, input_shape):
-        super(NadeMaskLayer, self).build(input_shape)  # Be sure to call this somewhere!
-        self._shape = input_shape
-
-    def call(self, x):
-        from theano import tensor as T
-        from theano.tensor.shared_randomstreams import RandomStreams
-        import theano
-        mask_rng = RandomStreams(0)
-
-        ints = mask_rng.random_integers(size=[self._shape[0]], high=self.mask_size - 1)
-        mask = T.zeros(([self.mask_size]))
-
-        def set_value_at_position(i, mask):
-            zeros = T.zeros_like(mask)
-            return T.set_subtensor(zeros[:i], 1)
-
-        result, updates = theano.scan(fn=set_value_at_position,
-                                      outputs_info=None,
-                                      sequences=ints,
-                                      non_sequences=mask)
-        mask = mask_rng.shuffle_row_elements(result)
-        return K.concatenate([x, mask])
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], 2 * self.mask_size)
-
 def total_masked_logdensity(input):
     component_logdensity, mask = input
     D = mask.shape[1]
