@@ -4,9 +4,10 @@ from keras.engine.topology import Layer
 from keras.layers import Input, Lambda, Concatenate
 from keras.models import Model
 
-def total_masked_logdensity(input):
-    component_logdensity, mask = input
-    D = K.expand_dims(K.constant(K.int_shape(mask)[1]),0)
+
+def total_masked_logdensity(inputs):
+    component_logdensity, mask = inputs
+    D = K.expand_dims(K.constant(K.int_shape(mask)[1]), 0)
     total = K.sum(K.abs(mask-1) * component_logdensity, axis=1) * D / (D - K.sum(mask, axis=1))
     return total
 
@@ -15,7 +16,6 @@ def create_input_layers(input_size):
     input_layer = Input(shape=(input_size,))
     mask_layer = Input(shape=(input_size,))
     masked_input_layer = Input(shape=(input_size*2,))
-    #.concatenate([x[0] * x[1], K.repeat_elements(K.expand_dims(x[1], 0), x[0].shape[0], 0)]))([input, mask])
     return masked_input_layer, input_layer, mask_layer
 
 
@@ -28,14 +28,9 @@ class NadeMaskLayer(Layer):
         if self._deterministic:
             self.seed = seed
         else:
-            self.seed = np.random.random_integers(0, 10e6)
+            self.seed = np.random.random_integers(2**30)
 
-
-    def build(self, input_shape):
-        super(NadeMaskLayer, self).build(input_shape)
-        self._shape = input_shape
-
-    def call(self, x):
+    def call(self, x, **kwargs):
         from theano import tensor as T
         from theano.tensor.shared_randomstreams import RandomStreams
         if K.backend() == "theano":
@@ -44,8 +39,8 @@ class NadeMaskLayer(Layer):
 
             ints = mask_rng.random_integers(size=K.expand_dims(x.shape[0], 0), high=x.shape[1] - 1)
 
-            def set_value_at_position(i, x):
-                zeros = T.zeros_like(x[0, :])
+            def set_value_at_position(i, ns_x):
+                zeros = T.zeros_like(ns_x[0, :])
                 return T.set_subtensor(zeros[:i], 1)
 
             result, updates = theano.scan(fn=set_value_at_position,
@@ -56,7 +51,7 @@ class NadeMaskLayer(Layer):
         elif K.backend() == "tensorflow":
             import tensorflow as tf
             tf.set_random_seed(self.seed)
-            ints = tf.random_uniform(shape=K.expand_dims(tf.shape(x)[0],0) ,
+            ints = tf.random_uniform(shape=K.expand_dims(tf.shape(x)[0], 0),
                                      maxval=x.shape[1],
                                      dtype=tf.int32)
             result = tf.sequence_mask(ints, maxlen=x.shape[1])
@@ -86,7 +81,10 @@ def logdensity_model(inner_model, num_of_orderings=1):
         for i in ordering:
             bn_mask = K.repeat(K.constant(mask), batch_size)[0]
             masked_input = Lambda(lambda x: K.concatenate([x * bn_mask, bn_mask]), output_shape=(input_size*2,))(inputs)
-            result = Lambda(lambda x: x[:, i], output_shape=(1,))(inner_model([masked_input, inputs, Lambda(lambda x: bn_mask, name="mask_{}_{}".format(o,i))(inputs)]))
+            inner_result = inner_model([masked_input,
+                                        inputs,
+                                        Lambda(lambda x: bn_mask, name="mask_{}_{}".format(o, i))(inputs)])
+            result = Lambda(lambda x: x[:, i], output_shape=(1,))(inner_result)
             outs.append(result)
             mask[0, i] = 1
 
@@ -104,9 +102,7 @@ def training_model(inner_model, mask_seed=None):
     input_size = inner_model.input_shape[0][1] // 2
     inputs = Input(shape=(input_size,))
     mask_layer = NadeMaskLayer(seed=mask_seed, name="maskedinput")(inputs)
-    masked_input = Lambda(lambda x: x[:,:input_size],name="input", output_shape=(input_size, ))(mask_layer)
     mask = Lambda(lambda x:  x[:, input_size:], name="mask", output_shape=(input_size, ))(mask_layer)
     inner_output = inner_model([mask_layer, inputs, mask])
     output = Lambda(total_masked_logdensity, output_shape=(1,))([inner_output, mask])
     return Model(inputs=inputs, outputs=output)
-
