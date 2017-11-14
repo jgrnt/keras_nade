@@ -12,7 +12,7 @@ def _mergeMoG(inputs):
 
 
 def createMoGLayer(input_layer, previous_layer, n_mixtures):
-    n_outputs = input_layer._keras_shape[1]
+    n_outputs = K.int_shape(input_layer)[1]
     mu = Reshape((n_outputs, n_mixtures))(Dense(n_outputs*n_mixtures, name="mog_mu")(previous_layer))
     sigma = Reshape((n_outputs, n_mixtures))(Lambda(lambda x: K.exp(x))(Dense(n_outputs*n_mixtures, name="mog_sigma", bias_initializer=keras.initializers.Ones())(previous_layer)))
     temp_alpha = Reshape((n_outputs, n_mixtures))(Lambda(K.exp)(Dense(n_outputs*n_mixtures, name="mog_alpha", bias_initializer=keras.initializers.Zeros())(previous_layer)))
