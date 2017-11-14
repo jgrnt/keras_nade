@@ -70,25 +70,33 @@ class NadeMaskLayer(Layer):
         return input_shape[0], 2 * input_shape[1]
 
 
-def logdensity_model(inner_model):
-    # TODO Orderings still missing
+def logdensity_model(inner_model, num_of_orderings=1):
     input_size = inner_model.input_shape[1][1]
+
     # This returns a tensor
     inputs = Input(shape=(input_size,))
     batch_size = K.shape(inputs)[0]
-    mask = np.zeros((1,input_size))
+
+    # Collect all outputs per batch here
     outs = []
-    for i in range(input_size):
-        bn_mask = K.repeat(K.constant(mask), batch_size)[0]
-        masked_input = Lambda(lambda x: K.concatenate([x * bn_mask, bn_mask]))(inputs)
-        result = Lambda(lambda x: K.expand_dims(x[i]), output_shape=(1,))(inner_model([masked_input, inputs, Lambda(lambda x: bn_mask, name="mask_"+str(i))(inputs)]))
-        outs.append(result)
-        mask[0, i] = 1
+
+    for o in range(num_of_orderings):
+        mask = np.zeros((1, input_size))
+        ordering = np.random.permutation(input_size)
+        for i in ordering:
+            bn_mask = K.repeat(K.constant(mask), batch_size)[0]
+            masked_input = Lambda(lambda x: K.concatenate([x * bn_mask, bn_mask]), output_shape=(input_size*2,))(inputs)
+            result = Lambda(lambda x: x[:, i], output_shape=(1,))(inner_model([masked_input, inputs, Lambda(lambda x: bn_mask, name="mask_{}_{}".format(o,i))(inputs)]))
+            outs.append(result)
+            mask[0, i] = 1
+
+    # Sum up output
     if len(outs) == 1:
         intermediate = outs[0]
     else:
         intermediate = Concatenate(axis=0)(outs)
-    outputs = Lambda(lambda x: K.logsumexp(x), output_shape=(1,))(intermediate)
+    outputs = Lambda(lambda x: K.logsumexp(x + K.log(1.0/num_of_orderings)), output_shape=(1,))(intermediate)
+
     return Model(inputs=inputs, outputs=outputs)
 
 

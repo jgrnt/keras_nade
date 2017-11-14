@@ -47,7 +47,7 @@ def test_train_logdensity():
     inner_model = Container(inputs=[masked_input_layer, input_layer, mask_layer], outputs=mog([masked_input_layer, input_layer, mask_layer]))
     model = training_model(inner_model)
     model.compile(loss=utils.maximize_prediction, optimizer=optimizers.SGD(lr=0.1),)
-    fit_met = model.fit(np.random.normal(0, size=(200, 2)),
+    model.fit(np.random.normal(0, size=(200, 2)),
               np.zeros(shape=(200, 1)),
               batch_size=10,
               verbose=0,
@@ -57,6 +57,31 @@ def test_train_logdensity():
     real = test_model.evaluate(np.random.normal(0, size=(50, 2)), np.zeros(shape=(50, 1)), verbose=0)
     wrong = test_model.evaluate(np.random.normal(1, size=(50, 2)), np.zeros(shape=(50, 1)), verbose=0)
     assert real < wrong
+
+
+def test_orderings():
+    masked_input_layer, input_layer, mask_layer = create_input_layers(6)
+    mog = Container(inputs=[masked_input_layer, input_layer, mask_layer], outputs=createMoGLayer(input_layer, Activation("relu")(Add()([Dense(16)(Lambda(lambda x: x[:,:2], output_shape=(2,))(masked_input_layer)),Dense(16, use_bias=False)(mask_layer)])),1))
+    inner_model = Container(inputs=[masked_input_layer, input_layer, mask_layer], outputs=mog([masked_input_layer, input_layer, mask_layer]))
+    model = training_model(inner_model)
+    model.compile(loss=utils.maximize_prediction, optimizer=optimizers.SGD(lr=0.1),)
+    model.fit(np.random.normal(0, size=(1000, 6)),
+              np.zeros(shape=(1000, 1)),
+              batch_size=10,
+              verbose=0,
+              epochs=1)
+
+    test_set = np.random.normal(0, size=(5, 6))
+    real_ld = np.log(np.sum(np.exp(-0.5 * test_set ** 2 - 0.5 * np.log(2 * np.pi))))
+
+    test_1_model = logdensity_model(inner_model)
+    test_1_model.compile(optimizer="sgd", loss=utils.maximize_prediction)
+    test_8_model = logdensity_model(inner_model, num_of_orderings=8)
+    test_8_model.compile(optimizer="sgd", loss=utils.maximize_prediction)
+
+    ld_1 = test_1_model.evaluate(test_set, np.zeros(shape=(5, 1)), verbose=0)
+    ld_8 = test_8_model.evaluate(test_set, np.zeros(shape=(5, 1)), verbose=0)
+    assert abs(-real_ld - ld_8) < abs(-real_ld - ld_1)
 
 
 
