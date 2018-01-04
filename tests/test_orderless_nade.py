@@ -57,6 +57,46 @@ def test_compare_original_nade():
         raise NotImplementedError()
 
 
+def test_compare_original_nade_reg():
+    """ Same as test_compare_original_nade,
+     but with regularization of activities in MOG layer enabled. Should not influence the output
+    """
+    import h5py
+    masked_input_layer, input_layer, mask_layer = create_input_layers(2)
+
+    mog = Container(inputs=[masked_input_layer, input_layer, mask_layer],
+                    outputs=mog_layer(input_layer, Activation("relu")
+                    (add([Dense(16)(Lambda(lambda x: x[:, :2])(masked_input_layer)),
+                          Dense(16, use_bias=False)(mask_layer)])), 1, True))
+    inner_model = Container(inputs=[masked_input_layer, input_layer, mask_layer],
+                            outputs=mog([masked_input_layer, input_layer, mask_layer]))
+
+    model = training_model(inner_model, mask_seed=1)
+    model.compile(loss=utils.maximize_prediction, optimizer="sgd")
+    with h5py.File("tests/original_nade_weights.hdf5") as h:
+        model.set_weights([
+            h["final_model/parameters/W1"][()].astype(np.float32),
+            h["final_model/parameters/b1"][()].astype(np.float32),
+            h["final_model/parameters/Wflags"][()].astype(np.float32),
+            h["final_model/parameters/V_alpha"][()].T.reshape((16, 2)).astype(np.float32),
+            h["final_model/parameters/b_alpha"][()].reshape(2).astype(np.float32),
+            h["final_model/parameters/V_sigma"][()].T.reshape((16, 2)).astype(np.float32),
+            h["final_model/parameters/b_sigma"][()].reshape(2).astype(np.float32),
+            h["final_model/parameters/V_mu"][()].T.reshape((16, 2)).astype(np.float32),
+            h["final_model/parameters/b_mu"][()].reshape(2).astype(np.float32)
+        ])
+
+    np.random.seed(1)
+    output = model.predict(np.random.normal(size=(5, 2)))
+    # Different random generation leads to different masks
+    if K.backend() == "tensorflow":
+        assert np.allclose(np.array([-2.20870864, -2.12633744, -4.85813326, -3.63397837, -1.89778014]), output)
+    elif K.backend() == "theano":
+        assert np.allclose(np.array([-3.33089394, -2.55555928, -4.85813281, -4.85442475, -1.92244674]), output)
+    else:
+        raise NotImplementedError()
+
+
 def test_train_logdensity():
     masked_input_layer, input_layer, mask_layer = create_input_layers(2)
     mog = Container(inputs=[masked_input_layer, input_layer, mask_layer],
