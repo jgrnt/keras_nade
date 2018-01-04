@@ -17,7 +17,7 @@ def test_compare_original_nade():
     orderlessNADE.py --theano --form MoG --dataset simple.hdf5 --samples_name 0 --hlayers 1
     --n_components 1 --epoch_size 10000 --momentum 0.0 --units 16 --training_route training
     --no_validation --batch_size 5
-    
+
     Training data consisted of 10000 samples drawn from normal(mean=0, sigma=1)
     The architecture here is the same as it would be created by reference implementation.
     """

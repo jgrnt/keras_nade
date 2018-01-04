@@ -1,4 +1,3 @@
-from __future__  import  print_function
 import h5py
 import numpy as np
 import keras.backend as K
@@ -20,7 +19,7 @@ batch_size = 100
 
 with h5py.File("red_wine.hdf5") as h_red_wine:
     training_data = np.vstack([h_red_wine["folds/1/training"][str(i)]["data"][()] for i in range(1, 9)])
-    validation_data = np.repeat(h_red_wine["folds/1/training/9/data"][()], n_loops-1, axis=0)
+    validation_data = np.repeat(h_red_wine["folds/1/training/9/data"][()], n_loops - 1, axis=0)
     test_data = h_red_wine["folds/1/tests/1/data"][()]
     mean, std = np.mean(training_data, axis=0), np.std(training_data, axis=0),
 
@@ -41,10 +40,9 @@ with h5py.File("red_wine.hdf5") as h_red_wine:
     model = training_model(inner_model, mask_seed=1)
     model.compile(loss=maximize_prediction, optimizer=optimizers.SGD(momentum=0.9, lr=lr))
 
-
     def scheduler(epoch):
         if epoch:
-            return K.get_value(model.optimizer.lr)-lr/(n_epochs+1)
+            return K.get_value(model.optimizer.lr) - lr / (n_epochs + 1)
         return lr
 
     change_lr = LearningRateScheduler(scheduler)
@@ -52,6 +50,6 @@ with h5py.File("red_wine.hdf5") as h_red_wine:
     model.fit(training_data,
               np.zeros((training_data.shape[0], 1)),
               batch_size=batch_size,
-              validation_data=(validation_data, np.zeros((validation_data.shape[0],1))),
+              validation_data=(validation_data, np.zeros((validation_data.shape[0], 1))),
               callbacks=[change_lr],
               epochs=n_epochs)
